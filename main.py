@@ -68,8 +68,10 @@ else:
 
 @app.get("/")
 async def root():
+    logger.info("Root endpoint hit - version 1.0.1")
     return {
         "message": "Welcome to Tenex Tutorials API 🎓",
+        "version": "1.0.1",
         "docs": "/docs (dev only)",
         "health": "/health"
     }
