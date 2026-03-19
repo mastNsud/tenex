@@ -8,7 +8,7 @@ An ultra-low-cost, high-performance platform for Class 10 students (Indian CBSE/
 - **Database**: [Neon](https://neon.tech/) (Free PostgreSQL - 3GB)
 - **Cache**: [Upstash](https://upstash.com/) (Free Redis - 10K commands/day)
 - **AI**: [Groq](https://groq.com/) (Llama 3.1 - Free unlimited inference)
-- **File Storage**: [Cloudflare R2](https://www.cloudflare.com/developer-platform/r2/) (10GB Free, No egress fees)
+- **File Storage**: [Cloudflare R2](https://www.cloudflare.com/developer-platform/r2/) (Optional: Used for hosting heavy videos/assignments with zero egress fees)
 - **Email**: [Resend](https://resend.com/) (3K emails/month)
 - **Monitoring**: [Better Stack](https://betterstack.com/) (Free logs & uptime)
 
