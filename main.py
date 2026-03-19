@@ -36,15 +36,23 @@ app.add_middleware(
 
 # Database Setup
 DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_async_engine(
-    DATABASE_URL,
-    pool_size=5,
-    max_overflow=10,
-    pool_pre_ping=True
-)
-AsyncSessionLocal = sessionmaker(
-    engine, class_=AsyncSession, expire_on_commit=False
-)
+
+if not DATABASE_URL:
+    logger.error("DATABASE_URL not found! Please set it in Railway Variables.")
+    # For now, we'll initialize a dummy engine or raise a clearer error
+    # raise ValueError("DATABASE_URL is missing")
+    engine = None
+    AsyncSessionLocal = None
+else:
+    engine = create_async_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True
+    )
+    AsyncSessionLocal = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
 
 async def get_db():
     async with AsyncSessionLocal() as session:
