@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+asyncpg
+groq
+python-dotenv
+python-multipart
+boto3
+python-telegram-bot
+resend
+pydantic-settings
+upstash-redis
+python-json-logger
+pytest
+anyio
+httpx
