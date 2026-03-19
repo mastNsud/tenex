@@ -59,7 +59,12 @@ async def get_db():
         yield session
 
 # Groq AI Client
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    logger.error("GROQ_API_KEY not found! AI features will be disabled.")
+    groq_client = None
+else:
+    groq_client = Groq(api_key=GROQ_API_KEY)
 
 @app.get("/health")
 async def health_check():
@@ -67,6 +72,8 @@ async def health_check():
 
 @app.post("/api/chat")
 async def chat(message: str, current_user_id: int = None):
+    if not groq_client:
+        raise HTTPException(status_code=503, detail="AI Service not configured (missing API key)")
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.1-70b-versatile",
