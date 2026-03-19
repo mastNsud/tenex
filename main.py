@@ -66,6 +66,14 @@ if not GROQ_API_KEY:
 else:
     groq_client = Groq(api_key=GROQ_API_KEY)
 
+@app.get("/")
+async def root():
+    return {
+        "message": "Welcome to Tenex Tutorials API 🎓",
+        "docs": "/docs (dev only)",
+        "health": "/health"
+    }
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "env": os.getenv("ENV")}
