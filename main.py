@@ -55,6 +55,11 @@ else:
     )
 
 async def get_db():
+    if AsyncSessionLocal is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not configured (DATABASE_URL is missing)"
+        )
     async with AsyncSessionLocal() as session:
         yield session
 
@@ -78,7 +83,11 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "env": os.getenv("ENV")}
+    return {
+        "status": "healthy",
+        "env": os.getenv("ENV"),
+        "database": "connected" if engine is not None else "unavailable (DATABASE_URL not set)",
+    }
 
 @app.post("/api/chat")
 async def chat(message: str, current_user_id: int = None):
