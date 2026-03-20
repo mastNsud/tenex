@@ -12,7 +12,18 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from models import Base
 
-# ... (logging setup)
+from pythonjsonlogger import jsonlogger
+
+# Load environment variables
+load_dotenv()
+
+# Setup logging
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter()
+logHandler.setFormatter(formatter)
+logger = logging.getLogger()
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
 
 app = FastAPI(
     title="Tenex Tutorials API",
@@ -67,7 +78,12 @@ async def get_db():
         yield session
 
 # Groq AI Client
-# ... (groq init)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    logger.error("GROQ_API_KEY not found! AI features will be disabled.")
+    groq_client = None
+else:
+    groq_client = Groq(api_key=GROQ_API_KEY)
 
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
