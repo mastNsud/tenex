@@ -11,6 +11,7 @@ resend
 pydantic-settings
 upstash-redis
 python-json-logger
+Jinja2
 pytest
 anyio
 httpx
