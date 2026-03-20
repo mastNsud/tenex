@@ -11,8 +11,17 @@ load_dotenv()
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Groq Client
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+# Initialize Groq client safely
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if GROQ_API_KEY:
+    try:
+        groq_client = Groq(api_key=GROQ_API_KEY)
+    except Exception as e:
+        logger.error(f"Failed to initialize Groq client: {e}")
+        groq_client = None
+else:
+    logger.warning("GROQ_API_KEY not set; Telegram bot AI features disabled.")
+    groq_client = None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a message when the command /start is issued."""
@@ -28,6 +37,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the user message and get a response from Groq."""
     user_msg = update.message.text
+
+    if not groq_client:
+        await update.message.reply_text("AI service is not configured. Please contact the administrator.")
+        return
+
     try:
         response = groq_client.chat.completions.create(
             model="llama-3.1-70b-versatile",
@@ -57,8 +71,6 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    # Run the bot until the user presses Ctrl-C
-    # In production on Railway, you'd usually run this as a separate worker or within the FastAPI lifepan (less recommended due to blockage)
     # application.run_polling(allowed_updates=Update.ALL_TYPES)
     logger.info("Telegram Bot logic initialized. Polling disabled for Railway integration demo.")
 
