@@ -1,57 +1,113 @@
 import os
-import boto3
-from botocore.config import Config
+import uvicorn
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
+from groq import Groq
+import logging
+from pythonjsonlogger import jsonlogger
 
+# Load environment variables
 load_dotenv()
 
-class R2Storage:
-    def __init__(self):
-        self.access_key = os.getenv("R2_ACCESS_KEY_ID")
-        self.secret_key = os.getenv("R2_SECRET_ACCESS_KEY")
-        self.endpoint_url = os.getenv("R2_ENDPOINT_URL")
-        self.bucket_name = os.getenv("R2_BUCKET_NAME")
+# Setup logging
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter()
+logHandler.setFormatter(formatter)
+logger = logging.getLogger()
+logger.addHandler(logHandler)
+logger.setLevel(logging.INFO)
+
+app = FastAPI(
+    title="Tenex Tutorials API",
+    docs_url="/docs" if os.getenv("ENV") == "development" else None
+)
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # Update with frontend domain in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Database Setup
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    logger.error("DATABASE_URL not found! Please set it in Railway Variables.")
+    # For now, we'll initialize a dummy engine or raise a clearer error
+    # raise ValueError("DATABASE_URL is missing")
+    engine = None
+    AsyncSessionLocal = None
+else:
+    engine = create_async_engine(
+        DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True
+    )
+    AsyncSessionLocal = sessionmaker(
+        engine, class_=AsyncSession, expire_on_commit=False
+    )
+
+async def get_db():
+    async with AsyncSessionLocal() as session:
+        yield session
+
+# Groq AI Client
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    logger.error("GROQ_API_KEY not found! AI features will be disabled.")
+    groq_client = None
+else:
+    groq_client = Groq(api_key=GROQ_API_KEY)
+
+@app.get("/")
+async def root():
+    logger.info("Root endpoint hit - version 1.0.1")
+    return {
+        "message": "Welcome to Tenex Tutorials API 🎓",
+        "version": "1.0.1",
+        "docs": "/docs (dev only)",
+        "health": "/health"
+    }
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "env": os.getenv("ENV")}
+
+@app.post("/api/chat")
+async def chat(message: str, current_user_id: int = None):
+    if not groq_client:
+        raise HTTPException(status_code=503, detail="AI Service not configured (missing API key)")
+    try:
+        response = groq_client.chat.completions.create(
+            model="llama-3.1-70b-versatile",
+            messages=[
+                {"role": "system", "content": "You are a helpful math and science tutor for Indian Class 10 students (CBSE/ICSE)."},
+                {"role": "user", "content": message}
+            ],
+            max_tokens=500,
+            temperature=0.7
+        )
+        ai_response = response.choices[0].message.content
         
-        if all([self.access_key, self.secret_key, self.endpoint_url]):
-            self.s3_client = boto3.client(
-                's3',
-                endpoint_url=self.endpoint_url,
-                aws_access_key_id=self.access_key,
-                aws_secret_access_key=self.secret_key,
-                config=Config(signature_version='s3v4')
-            )
-        else:
-            self.s3_client = None
+        # In a real app, you'd save this to ChatLog here
+        logger.info("AI Chat Response", extra={
+            "user_id": current_user_id,
+            "message": message,
+            "response": ai_response
+        })
+        
+        return {"response": ai_response}
+    except Exception as e:
+        logger.error(f"Error in chat: {e}")
+        raise HTTPException(status_code=500, detail="AI Service currently unavailable")
 
-    def upload_file(self, file_path, object_name=None):
-        """Upload a file to R2 bucket"""
-        if not self.s3_client:
-            return False
-            
-        if object_name is None:
-            object_name = os.path.basename(file_path)
-
-        try:
-            self.s3_client.upload_file(file_path, self.bucket_name, object_name)
-            return f"{self.endpoint_url}/{self.bucket_name}/{object_name}"
-        except Exception as e:
-            print(f"Error uploading to R2: {e}")
-            return False
-
-    def get_download_url(self, object_name, expiration=3600):
-        """Generate a presigned URL for the R2 object"""
-        if not self.s3_client:
-            return None
-            
-        try:
-            response = self.s3_client.generate_presigned_url(
-                'get_object',
-                Params={'Bucket': self.bucket_name, 'Key': object_name},
-                ExpiresIn=expiration
-            )
-            return response
-        except Exception as e:
-            print(f"Error generating presigned URL: {e}")
-            return None
-
-storage = R2Storage()
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, workers=1)
