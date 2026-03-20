@@ -7,18 +7,12 @@ from sqlalchemy.orm import sessionmaker
 from dotenv import load_dotenv
 from groq import Groq
 import logging
-from pythonjsonlogger import jsonlogger
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from models import Base
 
-# Load environment variables
-load_dotenv()
-
-# Setup logging
-logHandler = logging.StreamHandler()
-formatter = jsonlogger.JsonFormatter()
-logHandler.setFormatter(formatter)
-logger = logging.getLogger()
-logger.addHandler(logHandler)
-logger.setLevel(logging.INFO)
+# ... (logging setup)
 
 app = FastAPI(
     title="Tenex Tutorials API",
@@ -28,19 +22,23 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Update with frontend domain in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files
+os.makedirs("static", exist_ok=True)
+os.makedirs("templates", exist_ok=True)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
 
 # Database Setup
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     logger.error("DATABASE_URL not found! Please set it in Railway Variables.")
-    # For now, we'll initialize a dummy engine or raise a clearer error
-    # raise ValueError("DATABASE_URL is missing")
     engine = None
     AsyncSessionLocal = None
 else:
@@ -54,31 +52,31 @@ else:
         engine, class_=AsyncSession, expire_on_commit=False
     )
 
+@app.on_event("startup")
+async def startup():
+    if engine:
+        async with engine.begin() as conn:
+            # Create tables if they don't exist
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created/verified.")
+
 async def get_db():
+    if not AsyncSessionLocal:
+        raise HTTPException(status_code=500, detail="Database not configured")
     async with AsyncSessionLocal() as session:
         yield session
 
 # Groq AI Client
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-if not GROQ_API_KEY:
-    logger.error("GROQ_API_KEY not found! AI features will be disabled.")
-    groq_client = None
-else:
-    groq_client = Groq(api_key=GROQ_API_KEY)
+# ... (groq init)
 
-@app.get("/")
-async def root():
-    logger.info("Root endpoint hit - version 1.0.1")
-    return {
-        "message": "Welcome to Tenex Tutorials API 🎓",
-        "version": "1.0.1",
-        "docs": "/docs (dev only)",
-        "health": "/health"
-    }
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    logger.info("Root endpoint hit - serving frontend")
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "env": os.getenv("ENV")}
+    return {"status": "healthy", "env": os.getenv("ENV"), "db_connected": engine is not None}
 
 @app.post("/api/chat")
 async def chat(message: str, current_user_id: int = None):
